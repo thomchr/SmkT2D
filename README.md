@@ -28,3 +28,4 @@ van der Harst, P. & Verweij, N. Identification of 64 Novel Genetic Loci Provides
 Body mass index 
 
 Yengo, L. et al. Meta-analysis of genome-wide association studies for height and body mass index in ~700 000 individuals of European ancestry. Hum. Mol. Genet. 27, 3641–3649 (2018)
+
