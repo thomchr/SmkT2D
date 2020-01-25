@@ -1,6 +1,6 @@
 # SmkT2D
 
-Smoking increases type 2 diabetes risk: a mendelian randomization study
+Initiation of smoking and susceptibility to type 2 diabetes: a mendelian randomization study
 
 Christopher S Thom, Zhuoran Ding, Benjamin F Voight
 
@@ -23,9 +23,5 @@ Coronary artery disease
 
 van der Harst, P. & Verweij, N. Identification of 64 Novel Genetic Loci Provides an Expanded View on the Genetic Architecture of Coronary Artery Disease. Circ. Res. 122, 433–443 (2018) 
 
-
-
-Body mass index 
-
-Yengo, L. et al. Meta-analysis of genome-wide association studies for height and body mass index in ~700 000 individuals of European ancestry. Hum. Mol. Genet. 27, 3641–3649 (2018)
+Scripts and Data set explanation:
 
