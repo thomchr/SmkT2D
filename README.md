@@ -1,8 +1,11 @@
-# SmkT2D
-
-Initiation of smoking and susceptibility to type 2 diabetes: a mendelian randomization study
+# Initiation of smoking and susceptibility to type 2 diabetes: a mendelian randomization study
 
 Christopher S Thom, Zhuoran Ding, Benjamin F Voight
+
+Corresponding author: Benjamin F Voight
+
+If you have questions or would like to discuss any of this: thomc@email.chop.edu
+
 
 # Summary statistics from the following GWAS were used as part of this study
  We used data from individuals of European ancestry only. All data sets were analyzed in genome build hg19. 
@@ -37,7 +40,7 @@ van der Harst, P. & Verweij, N. Identification of 64 Novel Genetic Loci Provides
    
    instrument_summary_tables.R - for pulling out all the instruments (See SupplementalTables.xlsx)
     
-   Calculations for converting effect sizes (beta) and standard errors into 'change in type 2 diabetes odds ratio per _ change in exposure' are shown in the xls tables for Table 1 and Supplemental Table 5.xls
+   Table1.xls - Example calculations for converting effect sizes (beta) and standard errors into 'change in type 2 diabetes odds ratio per 2-fold change in smoking initiation exposure risk' 
    
    SmkT2D.LDSC.Scripts - command line scripts and explanation for deriving LDSC results
    
