@@ -29,12 +29,20 @@ van der Harst, P. & Verweij, N. Identification of 64 Novel Genetic Loci Provides
 
    MR-smk_int.T2D.R - the MR analyses of smoking initiation on T2D and CAD
    
-   MR-smk_ces.T2D.R  - the MR analyses of smoking cessation on T2D and CAD
+   MR-smk_ces.T2D.R  - the MR analyses of smoking cessation on T2D (and CAD)
    
-   MR-cig_day.T2D.R - the MR analyses of cigarettes per day on T2D and CAD
+   MR-cig_day.T2D.R - the MR analyses of cigarettes per day on T2D (and CAD)
    
-   summary_stats_forestplots.R - for generating all the forestplots    
+   summary_stats_forestplots.R - for generating all the forestplots   
+   
+   PDFs for derived forest plots and scatter plots are included here
    
    instrument_summary_tables.R - for pulling out all the instruments (See SupplementalTables.xlsx)
     
    Calculations for converting effect sizes (beta) and standard errors into 'change in type 2 diabetes odds ratio per _ change in exposure' are shown in the xls tables for Table 1 and Supplemental Table 5.xls
+   
+   SmkT2D.LDSC.Scripts - command line scripts and explanation for deriving LDSC results
+   
+   LDSCresults - full results of all trait combinations; subset are discussed in paper
+   
+   
