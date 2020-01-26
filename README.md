@@ -25,7 +25,7 @@ van der Harst, P. & Verweij, N. Identification of 64 Novel Genetic Loci Provides
 
 
 
-# Scripts and Data set explanation:
+# Scripts and Data set explanation - PDFs for forest plots and scatter plots, xls files for tables, are included here:
 
    MR-smk_int.T2D.R - the MR analyses of smoking initiation on T2D and CAD
    
@@ -33,9 +33,7 @@ van der Harst, P. & Verweij, N. Identification of 64 Novel Genetic Loci Provides
    
    MR-cig_day.T2D.R - the MR analyses of cigarettes per day on T2D (and CAD)
    
-   summary_stats_forestplots.R - for generating all the forestplots   
-   
-   PDFs for derived forest plots and scatter plots are included here
+   summary_stats_forestplots.R - for generating all the forestplots
    
    instrument_summary_tables.R - for pulling out all the instruments (See SupplementalTables.xlsx)
     
