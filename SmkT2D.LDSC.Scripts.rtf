@@ -1,0 +1,160 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1561\cocoasubrtf610
+{\fonttbl\f0\froman\fcharset0 Times-Roman;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red55\green116\blue213;\red163\green163\blue163;
+}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;\cssrgb\c27059\c54118\c86667;\cssrgb\c69804\c69804\c69804;
+}
+\margl1440\margr1440\vieww10800\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\sl280\partightenfactor0
+
+\f0\fs24 \cf2 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 #Will do LDSC for Smoking initiation and smoking cessation and cig per day...\
+#Downloaded summ stats from https://conservancy.umn.edu/handle/11299/201564 > links therein\
+\'a0\
+#usage: munge_sumstats.py [-h] [--sumstats SUMSTATS] [--N N] [--N-cas N_CAS]\
+[--N-con N_CON] [--out OUT] [--info-min INFO_MIN]\
+[--maf-min MAF_MIN] [--daner] [--daner-n]\
+[--no-alleles] [--merge-alleles MERGE_ALLELES]\
+[--n-min N_MIN] [--chunksize CHUNKSIZE] [--snp SNP]\
+[--N-col N_COL] [--N-cas-col N_CAS_COL]\
+[--N-con-col N_CON_COL] [--a1 A1] [--a2 A2] [--p P]\
+[--frq FRQ] [--signed-sumstats SIGNED_SUMSTATS]\
+[--info INFO] [--info-list INFO_LIST]\
+[--nstudy NSTUDY] [--nstudy-min NSTUDY_MIN]\
+[--ignore IGNORE] [--a1-inc] [--keep-maf]\
+\'a0\
+#From LDSC page: "it is assumed that the sign of the signed sumstats corresponds to the direction of effect associated with the a1 allele." 
+\b threfore ALT = a1
+\b0 \
+\'a0\
+\'a0\
+\'a0\
+#Header: \
+#CHROM POS RSID REF ALT AF STAT PVALUE BETA SE N EFFECTIVE_N Number_of_Studies ANNO ANNOFULL\
+\'a0\
+#LDSC is on the UPenn cluster, and can activate with following commands\
+\pard\pardeftab720\sl280\partightenfactor0
+
+\b \cf3 \strokec3 module load ldsc/1.0.1
+\b0 \cf2 \strokec2 \
+
+\b \cf3 \strokec3 source activate ldsc
+\b0 \cf2 \strokec2 \
+\'a0\
+\pard\pardeftab720\sl280\partightenfactor0
+
+\b \cf2 \ul \ulc2 #Smoking Initiation
+\b0 \ulnone \
+python /project/voight_ML/thomc/thomc_results/LDSC/ldsc/munge_sumstats.py --sumstats /project/voight_datasets/GWAS/52_Liu_Smoking/SmokingInitiation.txt.gz --merge-alleles /project/voight_selscan/ksiewert/Migraine_Project/LDScore/LDScoreData/w_hm3.snplist --a1 ALT --a2 REF --out 
+\b SmkInit.
+\b0 Munged\
+\'a0\
+\pard\pardeftab720\sl280\partightenfactor0
+\cf4 \strokec4 #BETA: [linear/logistic] regression coefficient (0 --> no effect; above 0 --> A1 is trait/risk increasing)\cf2 \strokec2 \
+\cf4 \strokec4 #N: Sample size\cf2 \strokec2 \
+\cf4 \strokec4 #RSID: Variant ID (e.g., rs number)\cf2 \strokec2 \
+\cf4 \strokec4 #ALT: Allele 1, interpreted as ref allele for signed sumstat.\cf2 \strokec2 \
+\cf4 \strokec4 #REF: Allele 2, interpreted as non-ref allele for signed sumstat.\cf2 \strokec2 \
+\cf4 \strokec4 #PVALUE: p-Value\cf2 \strokec2 \
+\'a0\
+\pard\pardeftab720\sl280\partightenfactor0
+
+\b \cf2 \ul \ulc2 #Smoking Cessation
+\b0 \ulnone \
+python /project/voight_ML/thomc/thomc_results/LDSC/ldsc/munge_sumstats.py --sumstats /project/voight_datasets/GWAS/52_Liu_Smoking/SmokingCessation.txt.gz --merge-alleles /project/voight_selscan/ksiewert/Migraine_Project/LDScore/LDScoreData/w_hm3.snplist --a1 ALT --a2 REF --out 
+\b SmkCess.
+\b0 Munged\
+\'a0\
+
+\b \ul #DrinksPerWeek
+\b0 \ulnone \
+python /project/voight_ML/thomc/thomc_results/LDSC/ldsc/munge_sumstats.py --sumstats /project/voight_datasets/GWAS/52_Liu_Smoking/DrinksPerWeek.txt.gz --merge-alleles /project/voight_selscan/ksiewert/Migraine_Project/LDScore/LDScoreData/w_hm3.snplist --a1 ALT --a2 REF --out 
+\b DrinksPerWk.
+\b0 Munged\
+\'a0\
+
+\b \ul #CigarettesPerDay
+\b0 \ulnone \
+python /project/voight_ML/thomc/thomc_results/LDSC/ldsc/munge_sumstats.py --sumstats /project/voight_datasets/GWAS/52_Liu_Smoking/CigarettesPerDay.txt.gz --merge-alleles /project/voight_selscan/ksiewert/Migraine_Project/LDScore/LDScoreData/w_hm3.snplist --a1 ALT --a2 REF --out 
+\b CigPerDay.
+\b0 Munged\
+\'a0\
+
+\b \ul #AgeofInitiation
+\b0 \ulnone \
+python /project/voight_ML/thomc/thomc_results/LDSC/ldsc/munge_sumstats.py --sumstats /project/voight_datasets/GWAS/52_Liu_Smoking/AgeofInitiation.txt.gz --merge-alleles /project/voight_selscan/ksiewert/Migraine_Project/LDScore/LDScoreData/w_hm3.snplist --a1 ALT --a2 REF --out 
+\b AgeInit.
+\b0 Munged\
+\'a0\
+
+\b \ul #T2D
+\b0 \ulnone \
+python /project/voight_ML/thomc/thomc_results/LDSC/ldsc/munge_sumstats.py --sumstats 
+\b /project/voight_datasets/GWAS/03_diagram/Mahajan.NatGenet2018b.T2D.European.hg19rsid.txt
+\b0  --merge-alleles /project/voight_selscan/ksiewert/Migraine_Project/LDScore/LDScoreData/w_hm3.snplist 
+\b --N-col Neff --ignore SNP,chr:pos
+\b0  --out 
+\b t2d.
+\b0 Munged\
+\'a0\
+
+\b \ul #BMI
+\b0 \ulnone \
+python /project/voight_ML/thomc/thomc_results/LDSC/ldsc/munge_sumstats.py --sumstats /project/voight_datasets/GWAS/04_giant/GIANT_2015_BMI_EUR.txt --merge-alleles /project/voight_selscan/ksiewert/Migraine_Project/LDScore/LDScoreData/w_hm3.snplist --out 
+\b BMI.
+\b0 Munged\
+\'a0\
+
+\b \ul #WHRadjBMI
+\b0 \ulnone  \
+\pard\pardeftab720\sl280\partightenfactor0
+
+\i \cf4 \strokec4 #from http://portals.broadinstitute.org/collaboration/giant/index.php/GIANT_consortium_data_files: "Allele1: The first allele (hg19 + strand). Where the regression coefficients (betas) are provided, the first allele is the effect allele. Where betas are not provided (typically the 2010 data), the first allele is the trait-increasing allele."
+\i0 \cf2 \strokec2 \
+python /project/voight_ML/thomc/thomc_results/LDSC/ldsc/munge_sumstats.py --sumstats /project/voight_datasets/GWAS/04_giant/GIANT_2015_WHRadjBMI_COMBINED_EUR.txt --merge-alleles /project/voight_selscan/ksiewert/Migraine_Project/LDScore/LDScoreData/w_hm3.snplist --a1 Allele1 --a2 Allele2 --out 
+\b WHRadjBMI.
+\b0 Munged\
+\'a0\
+\pard\pardeftab720\sl280\partightenfactor0
+
+\b \cf2 \ul \ulc2 #CAD
+\b0 \ulnone \
+python /project/voight_ML/thomc/thomc_results/LDSC/ldsc/munge_sumstats.py --sumstats /project/voight_datasets/GWAS/21_CADMeta/CAD_META.cst --merge-alleles /project/voight_selscan/ksiewert/Migraine_Project/LDScore/LDScoreData/w_hm3.snplist --snp oldID --N-cas 122733 --N-con 424528 --out 
+\b CAD
+\b0 .Munged\
+\'a0\
+\'a0\
+#make TraitsDirectories file using above traits and directories. Trait names have to match the .Munged file traits!!\
+\pard\pardeftab720\sl280\partightenfactor0
+\cf3 \strokec3 emacs SmkT2D.TraitsDirectories\cf2 \strokec2 \
+\'a0\
+#From within /project/voight_ML/thomc/thomc_results/LDSC/Smk.T2D.LDSC and 
+\i within the ldsc environment! (to get correct python version so this will work - this is what source activate does above)
+\i0 \
+\cf3 \strokec3 python ../submitLDSC.py SmkT2D.TraitsDirectories \cf2 \strokec2 \
+\'a0\
+\pard\pardeftab720\sl280\partightenfactor0
+
+\b \cf2 \ul \ulc2 #Make output to get into a scatter plot
+\b0 \ulnone \
+\'a0\
+#take LDSCreg.out and put into a file that looks like trait trait rg\
+\pard\pardeftab720\sl280\partightenfactor0
+\cf3 \strokec3 sh ../make.rg.dataframe.sh\cf2 \strokec2 \
+\'a0\
+#forgot - all traits need to be lowercase to match w Coloc matrix\
+\cf3 \strokec3 tr '[:upper:]' '[:lower:]' < LDSCresults > LDSCresults.lc\cf2 \strokec2 \
+\cf3 \strokec3 mv LDSCresults.lc LDSCresults\cf2 \strokec2 \
+\'a0\
+#make sure it all worked\
+\cf3 \strokec3 ls -lh *ldscresults.log | wc\cf2 \strokec2 \
+36 324 2812\
+\cf3 \strokec3 grep 'NA' LDSCresults\cf2 \strokec2 \
+#no results means all the boxes filled in!\
+\'a0\
+\cf3 \strokec3 sed -i 's/\\t/,/' LDSCresults\cf2 \strokec2 \
+\'a0\
+#output\
+\cf3 \strokec3 scp thomc@sciget.pmacs.upenn.edu:/project/voight_ML/thomc/thomc_results/LDSC/Smk.T2D.LDSC/LDSCresults Dropbox/Voight\\ Lab\\ Materials/MR.Smoking.T2D/LDSC/\cf2 \strokec2 \
+}
