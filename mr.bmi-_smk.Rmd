@@ -1,0 +1,106 @@
+---
+title: "BMI->Smoking"
+author: "Zhuoran Ding"
+date: "3/18/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## BMI->Smoking
+### Load data
+```{r}
+library(TwoSampleMR)
+library(dplyr)
+library(psych)
+
+# load the better instrument
+bmi_smk_data <- read.csv("/Users/dr/Desktop/MR.SMK-T2D/better_instrument_twoSampleMR/BMISmk.instrument.csv",
+                    stringsAsFactors = FALSE)
+
+# format smoking data
+smk_int <- format_data(bmi_smk_data, type="outcome", snps=bmi_smk_data$SNP, header=T,
+                       snp_col="SNP", beta_col="smk.beta", se_col="smk.se",
+                       pval_col="smk.pval", eaf_col="smk.eaf", 
+                       effect_allele_col="smk.effect_allele", other_allele_col="smk.other_allele")
+smk_int$outcome <- "smoking" 
+
+# format bmi data
+bmi_int <- format_data(bmi_smk_data, type="exposure", snps=bmi_smk_data$SNP, header=T,
+                       snp_col="SNP", beta_col="bmi.beta", se_col="bmi.se",
+                       pval_col="bmi.pval", eaf_col="bmi.eaf", 
+                       effect_allele_col="bmi.effect_allele", other_allele_col="bmi.other_allele")
+bmi_int$exposure <- "bmi" 
+```
+
+### LD clumping and harmonising
+```{r message=FALSE}
+# clumping
+bmi_clumped <- clump_data(bmi_int, clump_r2 = 0.01, clump_kb = 250)
+
+# harmonising
+bmi_harm <- harmonise_data(exposure_dat = bmi_clumped, outcome_dat = smk_int)
+nrow(bmi_harm)
+
+# output instrument
+int <- bmi_harm[, c("SNP", "chr.exposure", "pos.exposure", "effect_allele.exposure", "other_allele.exposure",
+                               "eaf.exposure", "beta.exposure", "se.exposure", "beta.outcome", "se.outcome")]
+
+colnames(int) <- c("rsid", "chromosome", "position", "effect allele", "non-effect allele",
+                             "effect allele frequency", "BMI effect size", 
+                             "BMI standard error", "smoking-initiation effect size", "smoking-initiation standard error")
+
+write.csv(int, "/Users/dr/Desktop/MR.SMK-T2D/better_instrument_twoSampleMR/instrument.bmi->smk.csv", row.names = FALSE)
+```
+
+### MR: BMI => Smoking
+```{r}
+bmi_smk_res <- mr(bmi_harm, method_list = c("mr_ivw", "mr_ivw_mre", "mr_ivw_fe", 
+                                            "mr_egger_regression", "mr_egger_regression_bootstrap",
+                                            "mr_weighted_median"))
+```
+
+
+### MR results:
+```{r}
+bmi_smk_res
+```
+
+
+### Heterogeneity test
+```{r}
+het = mr_heterogeneity(bmi_harm)
+het
+```
+
+
+### Horizontal pleiotropy test
+```{r}
+hp = mr_pleiotropy_test(bmi_harm)
+hp
+```
+
+### Satterplot
+```{r}
+p1 <- mr_scatter_plot(bmi_smk_res, bmi_harm)
+p1
+```
+
+
+### MR Steiger test of directionality
+```{r}
+directionality_test(bmi_harm)
+mr_steiger(p_exp = bmi_harm$pval.exposure, p_out = bmi_harm$pval.outcome, 
+           n_exp = bmi_harm$samplesize.exposure, n_out = bmi_harm$samplesize.outcome, 
+           r_exp = bmi_harm$beta.exposure, r_out = bmi_harm$beta.outcome, 
+           r_xxo = 1, r_yyo = 1)
+```
+
+
+
+
+
+
+

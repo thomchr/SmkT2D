@@ -1,0 +1,108 @@
+---
+title: "MR Steiger: Smoking--BMI"
+author: "Zhuoran Ding"
+date: "3/21/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Load data
+```{r message=FALSE, warning=FALSE}
+library(TwoSampleMR)
+library(dplyr)
+library(psych)
+
+# load outcome smoking data
+smk <- read.table("/Users/dr/Desktop/MR.SMK-T2D/smoking_initiation_complete_snp/SmokingInitiation.txt", header=T)
+smk$phenotype = "smoking"
+smk_data <- format_data(smk, type="outcome", snps=smk$RSID, header=T,
+                        snp_col="RSID", phenotype_col = "phenotype",
+                        beta_col="BETA", se_col="SE",
+                        pval_col="PVALUE", samplesize_col ="N",
+                        eaf_col="AF",
+                        effect_allele_col="ALT",
+                        other_allele_col="REF")
+
+# load outcome bmi data
+bmi <- read.table("/Users/dr/Desktop/MR.SMK-T2D/BMI-Meta-analysis_Locke_et_al+UKBiobank_2018_UPDATED.txt", header=T)
+bmi$phenotype = "BMI"
+bmi_data <- format_data(bmi, type="outcome", snps=bmi$SNP, header=T,
+                        snp_col="SNP", phenotype_col = "phenotype",
+                        beta_col="BETA", se_col="SE",
+                        pval_col="P", samplesize_col ="N",
+                        eaf_col="Freq_Tested_Allele_in_HRS",
+                        effect_allele_col="Tested_Allele",
+                        other_allele_col="Other_Allele")
+```
+
+### take the intersection
+```{r}
+smk_sig <- smk[smk$PVALUE <= 5*10^-8,]
+bmi_sig <- bmi[bmi$P <= 5*10^-8,]
+
+
+# smk 
+smk_index <- (smk_sig$CHROM %in% bmi_sig$CHR) & (smk_sig$POS %in% bmi_sig$POS)
+smk_sub <- smk_sig[smk_index,] 
+nrow(smk_sub)
+smk_int <- format_data(smk_sub, type="exposure", snps=smk_sub$RSID, header=T,
+                        snp_col="RSID", phenotype_col = "phenotype",
+                        beta_col="BETA", se_col="SE",
+                        pval_col="PVALUE", samplesize_col ="N",
+                        eaf_col="AF",
+                        effect_allele_col="ALT",
+                        other_allele_col="REF")
+
+# bmi
+bmi_index <- (bmi_sig$CHR %in% smk_sig$CHROM) & (bmi_sig$POS %in% smk_sig$POS)
+bmi_sub <- bmi_sig[bmi_index,] 
+nrow(bmi_sub)
+bmi_int <- format_data(bmi_sub, type="exposure", snps=bmi_sub$SNP, header=T,
+                        snp_col="SNP", phenotype_col = "phenotype",
+                        beta_col="BETA", se_col="SE",
+                        pval_col="P", samplesize_col ="N",
+                        eaf_col="Freq_Tested_Allele_in_HRS",
+                        effect_allele_col="Tested_Allele",
+                        other_allele_col="Other_Allele")
+```
+
+
+
+### MR Steiger test of directionality
+### LD clumping and harmonising
+```{r message=FALSE}
+# smk
+# harmonising
+smk_harm <- harmonise_data(exposure_dat = smk_int, outcome_dat = bmi_data)
+nrow(smk_harm)
+
+# bmi
+# harmonising
+bmi_harm <- harmonise_data(exposure_dat = bmi_int, outcome_dat = smk_data)
+nrow(bmi_harm)
+```
+
+
+
+### MR Steiger test of directionality
+## Testing smk->bmi
+```{r}
+directionality_test(smk_harm)
+mr_steiger(p_exp = smk_harm$pval.exposure, p_out = smk_harm$pval.outcome, 
+           n_exp = smk_harm$samplesize.exposure, n_out = smk_harm$samplesize.outcome, 
+           r_exp = smk_harm$beta.exposure, r_out = smk_harm$beta.outcome, 
+           r_xxo = 1, r_yyo = 1)
+```
+
+## Testing bmi->smk
+```{r}
+directionality_test(bmi_harm)
+mr_steiger(p_exp = bmi_harm$pval.exposure, p_out = bmi_harm$pval.outcome, 
+           n_exp = bmi_harm$samplesize.exposure, n_out = bmi_harm$samplesize.outcome, 
+           r_exp = bmi_harm$beta.exposure, r_out = bmi_harm$beta.outcome, 
+           r_xxo = 1, r_yyo = 1)
+```

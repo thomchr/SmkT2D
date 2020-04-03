@@ -1,0 +1,106 @@
+---
+title: "HbA1c->Smoking"
+author: "Zhuoran Ding"
+date: "3/21/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## HbA1c->BMI
+### Load data
+```{r message=FALSE}
+library(TwoSampleMR)
+library(dplyr)
+library(psych)
+
+# load exposure HbA1c
+hb <- read.table("/Users/dr/Desktop/MR.SMK-T2D/other_outcomes/HbA1c_METAL_European.txt", header=T)
+# only keep genome-wide significant snps
+hb.sig <- hb[hb$pvalue <= 5*10^-8,]
+hb_data <- format_data(hb.sig, type="exposure", snps=hb$snp, header=T, 
+                        snp_col="snp",
+                        beta_col="beta", se_col="stderr",
+                        eaf_col="eaf_hapmap_CEU", effect_allele_col="effect_allele",
+                        other_allele_col="other_allele", pval_col="pvalue")
+hb_data$exposure <- "HbA1c"
+
+# load outcome smoking data
+smk <- read.table("/Users/dr/Desktop/MR.SMK-T2D/smoking_initiation_complete_snp/SmokingInitiation.txt", header=T)
+smk$phenotype = "smoking"
+smk_data <- format_data(smk, type="outcome", snps=smk$RSID, header=T,
+                        snp_col="RSID", phenotype_col = "phenotype",
+                        beta_col="BETA", se_col="SE",
+                        pval_col="PVALUE", samplesize_col ="N",
+                        eaf_col="AF",
+                        effect_allele_col="ALT",
+                        other_allele_col="REF")
+
+
+
+
+```
+
+
+### LD clumping and harmonising
+```{r message=FALSE}
+# clumping
+hb_clumped <- clump_data(hb_data, clump_r2 = 0.01, clump_kb = 250)
+
+# harmonising
+hb_harm <- harmonise_data(exposure_dat = hb_clumped, outcome_dat = smk_data)
+nrow(hb_harm)
+```
+
+### MR: HbA1c => BMI
+```{r}
+hb_bmi_res <- mr(hb_harm, method_list = c("mr_ivw", "mr_ivw_mre", "mr_ivw_fe", 
+                                            "mr_egger_regression", "mr_egger_regression_bootstrap",
+                                            "mr_weighted_median"))
+```
+
+
+### MR results:
+```{r}
+hb_bmi_res
+```
+
+
+### Heterogeneity test
+```{r}
+het = mr_heterogeneity(hb_harm)
+het
+```
+
+
+### Horizontal pleiotropy test
+```{r}
+hp = mr_pleiotropy_test(hb_harm)
+hp
+```
+
+### Satterplot
+```{r}
+p1 <- mr_scatter_plot(hb_bmi_res, hb_harm)
+p1
+```
+
+
+### MR Steiger test of directionality
+```{r}
+directionality_test(hb_harm)
+mr_steiger(p_exp = hb_harm$pval.exposure, p_out = hb_harm$pval.outcome, 
+           n_exp = hb_harm$samplesize.exposure, n_out = hb_harm$samplesize.outcome, 
+           r_exp = hb_harm$beta.exposure, r_out = hb_harm$beta.outcome, 
+           r_xxo = 1, r_yyo = 1)
+```
+
+
+
+
+
+
+
+

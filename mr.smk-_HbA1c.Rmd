@@ -1,0 +1,107 @@
+---
+title: "Smoking->HbA1c"
+author: "Zhuoran Ding"
+date: "3/21/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## smoking -> HbA1c
+### Load data
+```{r}
+library(TwoSampleMR)
+library(dplyr)
+library(psych)
+
+
+# load the better instrument
+smk_bmi_data <- read.csv("/Users/dr/Desktop/MR.SMK-T2D/better_instrument_twoSampleMR/SmkBMI.instrument.csv",
+                    stringsAsFactors = FALSE)
+
+# format smoking data
+smk_int <- format_data(smk_bmi_data, type="exposure", snps=smk_bmi_data$SNP, header=T,
+                       snp_col="SNP", beta_col="smk.beta", se_col="smk.se",
+                       pval_col="smk.pval", eaf_col="smk.eaf", 
+                       effect_allele_col="smk.effect_allele", other_allele_col="smk.other_allele")
+smk_int$exposure <- "smoking" 
+
+hb <- read.table("/Users/dr/Desktop/MR.SMK-T2D/other_outcomes/HbA1c_METAL_European.txt", header=T)
+hb_data <- format_data(hb, type="outcome", snps=hb$snp, header=T, 
+                        snp_col="snp",
+                        beta_col="beta", se_col="stderr",
+                        eaf_col="eaf_hapmap_CEU", effect_allele_col="effect_allele",
+                        other_allele_col="other_allele", pval_col="pvalue")
+```
+
+### LD clumping and harmonising
+```{r message=FALSE}
+# clumping
+smk_clumped <- clump_data(smk_int, clump_r2 = 0.01, clump_kb = 250)
+
+# harmonising
+smk_harm <- harmonise_data(exposure_dat = smk_clumped, outcome_dat = hb_data)
+nrow(smk_harm)
+
+# output instrument
+# int <- smk_harm[, c("SNP", "chr.exposure", "pos.exposure", "effect_allele.exposure", "other_allele.exposure",
+#                                "eaf.exposure", "beta.exposure", "se.exposure", "beta.outcome", "se.outcome")]
+# 
+# colnames(int) <- c("rsid", "chromosome", "position", "effect allele", "non-effect allele",
+#                              "effect allele frequency", "smoking-initiation effect size", 
+#                              "smoking-initiation standard error", "HbA1c effect size", "HbA1c standard error")
+# 
+# write.csv(int, "/Users/dr/Desktop/MR.SMK-T2D/better_instrument_twoSampleMR/instrument.smk->HbA1c.csv", row.names = FALSE)
+```
+
+### MR: smoking => HbA1c
+```{r}
+smk_bmi_res <- mr(smk_harm, method_list = c("mr_ivw", "mr_ivw_mre", "mr_ivw_fe", 
+                                            "mr_egger_regression", "mr_egger_regression_bootstrap",
+                                            "mr_weighted_median"))
+```
+
+
+### MR results:
+```{r}
+smk_bmi_res
+```
+
+
+### Heterogeneity test
+```{r}
+het = mr_heterogeneity(smk_harm)
+het
+```
+
+
+### Horizontal pleiotropy test
+```{r}
+hp = mr_pleiotropy_test(smk_harm)
+hp
+```
+
+### Satterplot
+```{r}
+p1 <- mr_scatter_plot(smk_bmi_res, smk_harm)
+p1
+```
+
+
+### MR Steiger test of directionality
+```{r}
+directionality_test(smk_harm)
+mr_steiger(p_exp = smk_harm$pval.exposure, p_out = smk_harm$pval.outcome, 
+           n_exp = smk_harm$samplesize.exposure, n_out = smk_harm$samplesize.outcome, 
+           r_exp = smk_harm$beta.exposure, r_out = smk_harm$beta.outcome, 
+           r_xxo = 1, r_yyo = 1)
+```
+
+
+
+
+
+
+

@@ -1,0 +1,175 @@
+---
+title: "MVMR: BMI-Smoking->CAD"
+author: "Zhuoran Ding"
+date: "3/16/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Perfect overlaps
+### Load data
+```{r}
+library(MVMR)
+library(TwoSampleMR)
+library(dplyr)
+
+
+# load smoking data
+smk_int <- read_exposure_data("/Users/dr/Desktop/MR.SMK-T2D/smoking_initiation/smoking_initiation.csv", sep=",")
+
+# load cad data
+cad <- read.table("/Users/dr/Desktop/MR.SMK-T2D/CAD_META", header=T)
+cad_data <- format_data(cad, type="outcome", snps=cad$oldID, header=T, 
+                        snp_col="oldID",
+                        beta_col="Effect", se_col="StdErr",
+                        eaf_col="Feq1", effect_allele_col="Allele1",
+                        other_allele_col="Allele2", pval_col="P-value")
+
+# load bmi data
+bmi <- read.table("/Users/dr/Desktop/MR.SMK-T2D/BMI-Meta-analysis_Locke_et_al+UKBiobank_2018_UPDATED.txt", header=T)
+bmi$phenotype = "BMI"
+
+# only keep genome-wide significant snps
+bmi <- bmi[bmi$P <= 5*10^-8,]
+bmi <- format_data(bmi, type="exposure", snps=bmi$SNP, header=T,
+                        snp_col="SNP", phenotype_col = "phenotype",
+                        beta_col="BETA", se_col="SE",
+                        pval_col="P", samplesize_col ="N",
+                        eaf_col="Freq_Tested_Allele_in_HRS",
+                        effect_allele_col="Tested_Allele",
+                        other_allele_col="Other_Allele")
+```
+
+
+### Get the intersection of SMK and BMI SNPs
+```{r}
+# get the intersection of SMK and BMI SNPs
+#bmi_sub <- bmi[bmi$SNP %in% smk_int$SNP,]
+
+```
+
+### LD clumping and harmonising
+```{r message=FALSE}
+# clumping bmi 
+bmi_sub_clumped <- clump_data(bmi, clump_r2 = 0.01, clump_kb = 250)
+
+# harmonising by CAD data
+smk_int_harm <- harmonise_data(exposure_dat = smk_int, outcome_dat = cad_data)
+bmi_harm <- harmonise_data(exposure_dat = bmi_sub_clumped, outcome_dat = cad_data)
+
+```
+
+### Merge smk and bmi instruments
+```{r}
+# change colnames for merging
+colnames(smk_int_harm)[which(colnames(smk_int_harm) %in% c("beta.exposure", "se.exposure"))] <- c("beta.smk", "se.smk")
+colnames(bmi_harm)[which(colnames(bmi_harm) %in% c("beta.exposure", "se.exposure"))] <- c("beta.bmi", "se.bmi")
+
+colnames(smk_int_harm)[which(colnames(smk_int_harm) %in% c("beta.outcome", "se.outcome"))] <- c("beta.outcome.smk", "se.outcome.smk")
+colnames(bmi_harm)[which(colnames(bmi_harm) %in% c("beta.outcome", "se.outcome"))] <- c("beta.outcome.bmi", "se.outcome.bmi")
+
+# merge smk and bmi instruments
+combined <- merge(select(smk_int_harm, SNP, beta.smk, se.smk, beta.outcome.smk, se.outcome.smk), 
+                  select(bmi_harm, SNP, beta.bmi, se.bmi, beta.outcome.bmi, se.outcome.bmi), by="SNP")
+
+
+
+# flip the sign of inconsistant harmonisation
+inconsistant <- combined$beta.outcome.smk != combined$beta.outcome.bmi
+combined[inconsistant,]$beta.bmi <- combined[inconsistant,]$beta.bmi * -1
+
+print(paste("# perfect overlapped SNPs is:", nrow(combined)))
+```
+
+
+## BMI proxies of the leftout snps in smoking instrument
+### load BMI proxies
+
+```{r}
+# load bmi proxies
+bmi_smk.px <- read.table("/Users/dr/Desktop/MR.SMK-T2D/BMI_snp_proxies/Proxies.BMISmk.txt", header = TRUE)
+
+# seperate out smk for harmonising
+smk.px <- data.frame("SNP" = bmi_smk.px$SNP_B, "effect_allele.exposure" = bmi_smk.px$ALT,
+                     "other_allele.exposure" = bmi_smk.px$REF, "eaf.exposure" = bmi_smk.px$AF,
+                     "beta.exposure" = bmi_smk.px$BETA.1, "se.exposure" = bmi_smk.px$SE.1,
+                     "pval.exposure" = bmi_smk.px$PVALUE, "samplesize.exposure" = bmi_smk.px$N.1,
+                     "exposure" = "smoking", "mr_keep.exposure" = TRUE, 
+                     "pval_origin.exposure" = "reported", "id.exposure" = "qYo4wL",
+                     "name" = bmi_smk.px$SNP_B)
+
+# seperate out bmi for harmonising
+bmi.px <- data.frame("SNP" = bmi_smk.px$SNP_B, "effect_allele.exposure" = bmi_smk.px$Tested_Allele,
+                     "other_allele.exposure" = bmi_smk.px$Other_Allele, 
+                     "eaf.exposure" = bmi_smk.px$Freq_Tested_Allele_in_HRS,
+                     "beta.exposure" = bmi_smk.px$BETA, "se.exposure" = bmi_smk.px$SE,
+                     "pval.exposure" = bmi_smk.px$P, "samplesize.exposure" = bmi_smk.px$N,
+                     "exposure" = "bmi", "mr_keep.exposure" = TRUE, 
+                     "pval_origin.exposure" = "reported", "id.exposure" = "uLruT0",
+                     "name" = bmi_smk.px$SNP_B)
+```
+
+### LD clumping and Harmonising
+```{r message=FALSE}
+# clumping
+bmi.px.clumped <- clump_data(bmi.px, clump_r2 = 0.01, clump_kb = 250)
+smk.px.clumped <- clump_data(smk.px, clump_r2 = 0.01, clump_kb = 250)
+
+# harmonising by CAD data
+bmi.px.harm <- harmonise_data(exposure_dat = bmi.px.clumped, outcome_dat = cad_data)
+smk.px.harm <- harmonise_data(exposure_dat = smk.px.clumped, outcome_dat = cad_data)
+```
+
+
+### Merge smk and bmi instruments
+```{r}
+# change colnames for merging
+colnames(smk.px.harm)[which(colnames(smk.px.harm) %in% c("beta.exposure", "se.exposure"))] <- c("beta.smk", "se.smk")
+colnames(bmi.px.harm)[which(colnames(bmi.px.harm) %in% c("beta.exposure", "se.exposure"))] <- c("beta.bmi", "se.bmi")
+
+colnames(smk.px.harm)[which(colnames(smk.px.harm) %in% c("beta.outcome", "se.outcome"))] <- c("beta.outcome.smk", "se.outcome.smk")
+colnames(bmi.px.harm)[which(colnames(bmi.px.harm) %in% c("beta.outcome", "se.outcome"))] <- c("beta.outcome.bmi", "se.outcome.bmi")
+
+
+# merge smk and bmi instruments
+combined.px <- merge(select(smk.px.harm, name, beta.smk, se.smk, beta.outcome.smk, se.outcome.smk), 
+                  select(bmi.px.harm, name, beta.bmi, se.bmi, beta.outcome.bmi, se.outcome.bmi), by="name")
+
+# flip the sign of inconsistant harmonisation
+inconsistant <- combined.px$beta.outcome.smk != combined.px$beta.outcome.bmi
+combined.px[inconsistant,]$beta.bmi <- combined.px[inconsistant,]$beta.bmi * -1
+
+print(paste("# SNPs recoved by proxies is:", nrow(combined.px)))
+```
+
+
+## Final instrument
+```{r}
+final_instrument <- data.frame("beta.smk" = c(combined$beta.smk, combined.px$beta.smk),
+                               "se.smk" = c(combined$se.smk, combined.px$se.smk),
+                               "beta.bmi" = c(combined$beta.bmi, combined.px$beta.bmi),
+                               "se.bmi" = c(combined$se.bmi, combined.px$se.bmi),
+                               "beta.cad" = c(combined$beta.outcome.smk, combined.px$beta.outcome.smk),
+                               "se.cad" = c(combined$se.outcome.smk, combined.px$se.outcome.smk),
+                               "snp" = c(combined$SNP, combined.px$name))
+print(paste("# SNPs in the final instrument is:", nrow(final_instrument)))
+```
+
+## Perform CAD MVMR
+```{r}
+# perform mvmr
+mvmr_in <- format_mvmr(BXGs = select(final_instrument, beta.smk, beta.bmi), 
+            BYG = final_instrument$beta.cad, 
+            seBXGs = select(final_instrument, se.smk, se.bmi),
+            seBYG = final_instrument$se.cad,
+            RSID = final_instrument$snp)
+
+
+# ******note: gencov is set to default 0. 
+# ******may need  covariance between the effect of the genetic variants on each exposure
+mvmr_out <- mvmr(mvmr_in, gencov = cov(combined$beta.smk, combined$beta.bmi), weights = 1)
+mvmr_out <- mvmr(mvmr_in, gencov = 0, weights = 1)
+```
