@@ -33,22 +33,4 @@ Yengo L, Sidorenko J, Kemper KE, Zheng Z, Wood AR, Weedon MN, Frayling TM, Hirsc
 
 
 
-# Scripts and Data set explanation - PDFs for forest plots and scatter plots, xls files for tables, are included here:
-
-   MR-smk_int.T2D.R - the MR analyses of smoking initiation on T2D and CAD
-   
-   MR-smk_ces.T2D.R  - the MR analyses of smoking cessation on T2D (and CAD)
-   
-   MR-cig_day.T2D.R - the MR analyses of cigarettes per day on T2D (and CAD)
-   
-   summary_stats_forestplots.R - for generating all the forestplots
-   
-   instrument_summary_tables.R - for pulling out all the instruments (See SupplementalTables.xlsx)
-    
-   Table1.xls - Example calculations for converting effect sizes (beta) and standard errors into 'change in type 2 diabetes odds ratio per 2-fold change in smoking initiation exposure risk' 
-   
-   SmkT2D.LDSC.Scripts - command line scripts and explanation for deriving LDSC results
-   
-   LDSCresults - full results of all trait combinations; subset are discussed in paper
-   
-   
+# Scripts are in a separate branch 'Scripts'
