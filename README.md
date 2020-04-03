@@ -27,6 +27,11 @@ Coronary artery disease
 van der Harst, P. & Verweij, N. Identification of 64 Novel Genetic Loci Provides an Expanded View on the Genetic Architecture of Coronary Artery Disease. Circ. Res. 122, 433–443 (2018) 
 
 
+Body mass index
+
+Yengo L, Sidorenko J, Kemper KE, Zheng Z, Wood AR, Weedon MN, Frayling TM, Hirschhorn J, Yang J, Visscher PM, GIANT Consortium. (2018). Meta-analysis of genome-wide association studies for height and body mass index in ~700,000 individuals of European ancestry. Hum Mol Genet. 2018 Oct 15;27(20):3641-3649. doi: 10.1093/hmg/ddy271.
+
+
 
 # Scripts and Data set explanation - PDFs for forest plots and scatter plots, xls files for tables, are included here:
 
