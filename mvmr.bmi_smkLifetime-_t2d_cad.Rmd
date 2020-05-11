@@ -1,0 +1,754 @@
+---
+title: 'MVMR: BMI-Lifetimesmoking->T2D_or_CAD'
+author: "Zhuoran Ding ed by CST"
+date: "4/16/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::include_graphics
+```
+
+## Perfect overlaps
+### Load data
+```{r message=FALSE, warning=FALSE}
+library(MVMR)
+library(TwoSampleMR)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+
+# load smoking data
+#smk <- read.table("/Users/thomc/Desktop/Zhuoran_rmd/LifetimeSmoking-Index-exposure.csv", sep=",", header=T)
+smk <- read.table("/Volumes/4TB.RNAseq/MR.Smk-BMI-T2D/2019.10.02LifetimeSmokingGWASDataSheet1.txt", sep=" ", header=T)
+smk_int <- format_data(smk, type="exposure", snps=smk$SNP, header=T, 
+                       snp_col="SNP", 
+                       beta_col="BETA", se_col="SE",
+                       eaf_col="EAF", effect_allele_col="EFFECT_ALLELE",
+                       other_allele_col="OTHER_ALLELE", pval_col="P")
+
+# load t2d data
+pad <- read.table("/Volumes/4TB.RNAseq/MR.Smk-BMI-T2D/Mahajan.NatGenet2018b.T2D.European.hg19rsid.txt", header=T)
+pad_data <- format_data(pad, type="outcome", snps=pad$rsid, header=T,
+                       snp_col="rsid",
+                       beta_col="Beta", se_col="SE",
+                       eaf_col="EAF", effect_allele_col="EA",
+                       other_allele_col="NEA", pval_col="Pvalue")
+
+# load cad data
+cad <- read.table("/Volumes/4TB.RNAseq/MR.Smk-BMI-T2D/CADMeta.anno.forMR", header=T)
+cad_data <- format_data(cad, type="outcome", snps=cad$SNP, header=T,
+                       snp_col="SNP",
+                       beta_col="beta", se_col="se",
+                       eaf_col="eaf", effect_allele_col="effect_allele",
+                       other_allele_col="other_allele", pval_col="pval")
+
+# load bmi data
+bmi <- read.table("/Volumes/4TB.RNAseq/MR.Smk-BMI-T2D/Meta-analysis_Locke_et_al+UKBiobank_2018_UPDATED.txt.gz", header=T)
+bmi$phenotype = "BMI"
+
+# only keep genome-wide significant snps
+#bmi <- bmi[bmi$P <= 5*10^-8,]
+bmi_exp <- format_data(bmi, type="exposure", snps=bmi$SNP, header=T,
+                        snp_col="SNP", phenotype_col = "phenotype",
+                        beta_col="BETA", se_col="SE",
+                        pval_col="P", samplesize_col ="N",
+                        eaf_col="Freq_Tested_Allele_in_HRS",
+                        effect_allele_col="Tested_Allele",
+                        other_allele_col="Other_Allele")
+```
+
+
+### Get the intersection of SMK and BMI SNPs, clump/harmonize, merge instruments, and run MVMR Smk-BMI-T2D 
+```{r message=FALSE}
+# get the intersection of SMK and BMI SNPs
+smk_sub <- smk_int[smk_int$SNP %in% bmi_exp$SNP,]
+smk_sub <- smk_sub[smk_sub$SNP %in% pad_data$SNP,]
+
+
+# clumping smk 
+smk_sig <- smk_sub[smk_sub$pval.exposure < 5*10^-8,]
+smk_sig_clumped <- clump_data(smk_sig)
+
+bmi_sub <- bmi_exp[bmi_exp$SNP %in% smk_sig_clumped$SNP,]
+pad_sub <- pad_data[pad_data$SNP %in% smk_sig_clumped$SNP,]
+
+# harmonising by T2D data
+smk_harm <- harmonise_data(exposure_dat = smk_sig_clumped, outcome_dat = pad_sub)
+#bmi_harm <- harmonise_data(exposure_dat = bmi_sub_clumped, outcome_dat = pad_data)
+bmi_harm <- harmonise_data(exposure_dat = bmi_sub, outcome_dat = pad_sub)
+
+
+### Merge smk and bmi instruments
+# change colnames for merging
+colnames(smk_harm)[which(colnames(smk_harm) %in% c("beta.exposure", "se.exposure"))] <- c("beta.smk", "se.smk")
+colnames(bmi_harm)[which(colnames(bmi_harm) %in% c("beta.exposure", "se.exposure"))] <- c("beta.bmi", "se.bmi")
+
+colnames(smk_harm)[which(colnames(smk_harm) %in% c("beta.outcome", "se.outcome"))] <- c("beta.outcome.smk", "se.outcome.smk")
+colnames(bmi_harm)[which(colnames(bmi_harm) %in% c("beta.outcome", "se.outcome"))] <- c("beta.outcome.bmi", "se.outcome.bmi")
+
+# merge smk and bmi instruments
+combined <- merge(select(smk_harm, SNP, beta.smk, se.smk, beta.outcome.smk, se.outcome.smk), 
+                  select(bmi_harm, SNP, beta.bmi, se.bmi, beta.outcome.bmi, se.outcome.bmi), by="SNP")
+
+
+
+# flip the sign of inconsistant harmonisation
+inconsistant <- combined$beta.outcome.smk != combined$beta.outcome.bmi
+combined[inconsistant,]$beta.bmi <- combined[inconsistant,]$beta.bmi * -1
+
+print(paste("# perfect overlapped SNPs is:", nrow(combined)))
+
+## Final instrument for MVMR
+final_instrument <- data.frame("beta.smk" = combined$beta.smk,
+                               "se.smk" = combined$se.smk,
+                               "beta.bmi" = combined$beta.bmi,
+                               "se.bmi" = combined$se.bmi,
+                               "beta.t2d" = combined$beta.outcome.smk,
+                               "se.t2d" = combined$se.outcome.smk,
+                               "snp" = combined$SNP)
+
+print(paste("# SNPs in the final instrument is:", nrow(final_instrument)))
+
+## Perform MVMR
+mvmr_in <- format_mvmr(BXGs = select(combined, beta.smk, beta.bmi), 
+            BYG = combined$beta.outcome.smk, 
+            seBXGs = select(combined, se.smk, se.bmi),
+            seBYG = combined$se.outcome.smk,
+            RSID = combined$SNP)
+
+rownames(mvmr_in) <- mvmr_in$SNP
+
+#mvmr_in <- format_mvmr(BXGs = select(final_instrument, beta.smk, beta.bmi), 
+#            BYG = final_instrument$beta.t2d, 
+#            seBXGs = select(final_instrument, se.smk, se.bmi),
+#            seBYG = final_instrument$se.t2d,
+#            RSID = final_instrument$snp)
+
+# ******note: gencov is set to default 0. 
+# ******may need  covariance between the effect of the genetic variants on each exposure
+mvmr_out <- mvmr(mvmr_in, gencov = cov(combined$beta.smk, combined$beta.bmi), weights = 1)
+#mvmr_out <- mvmr(mvmr_in, gencov = 0, weights = 1)
+
+
+# this is from mvmr final result
+## %%% need to change df
+m1 <- mvmr_out$coef
+m1
+data <- data.frame("beta" = m1[,"Estimate"], "se" = m1[,"Std. Error"], 
+           df = 283, "t" = m1[,"t value"], "exposure" = c("Smoking", "BMI"))
+data$up <- data$beta + data$se * qt(0.975, df = data$df)
+data$low <- data$beta - data$se * qt(0.975, df = data$df)
+
+# exp
+data$exp.beta <- exp(data$beta)
+data$exp.up <- exp(data$up)
+data$exp.low <- exp(data$low)
+
+data$exp2.beta <- exp(log(2) * data$beta)
+data$exp2.up <- exp(log(2) * data$up)
+data$exp2.low <- exp(log(2) * data$low)
+
+# plot
+## %%% need to change filename and title
+## %%% need to change scale of beta (exp.beta/exp.low/exp.up or exp2.beta/low/up !!!)
+pdf("MVMR.LfSmk-BMI_T2D.pdf")
+ggplot2::ggplot(data, aes(y = exposure, x = exp.beta)) + 
+  ggplot2::geom_vline(xintercept = 1, linetype = "dotted") + 
+  ggplot2::geom_errorbarh(ggplot2::aes(xmin = exp.low, xmax = exp.up, size=as.factor(0.01),
+                                       colour = as.factor(0.01)), size=4,
+                          height = 0) + ggplot2::geom_point(ggplot2::aes(colour = as.factor(0.01)), size=16)  + 
+  ggplot2::scale_colour_manual(values = c("black", "red")) + 
+  ggplot2::scale_size_manual(values = c(0.3, 1)) + 
+  ggplot2::theme(legend.position = "none", 
+                 axis.title.y = ggplot2::element_text(size = 14), 
+                 axis.ticks.y = ggplot2::element_line(size = 0), 
+                 axis.title.x = ggplot2::element_text(size = 14)) + 
+  ggplot2::ggtitle("MR odds ratio for LifetimeSmoking on T2D conditioning on BMI") + 
+  theme(plot.title = element_text(size = 15, face = "bold"))
+
+
+#print out table
+smk_info <- merge(combined,smk,by="SNP")
+smk_bmi_t2d_table <- smk_info[c("rsid" = "SNP",
+                                "chromosome" = "CHR",
+                                "position" = "BP",
+                                "effect allele" = "EFFECT_ALLELE",
+                                "non-effect allele" = "OTHER_ALLELE",
+                                "effect allele frequency" = "EAF",
+                                "LfSmk effect" = "beta.smk",
+                               "LfSmk standard error" = "se.smk",
+                               "BMI effect" = "beta.bmi",
+                               "BMI standard error" = "se.bmi",
+                               "CAD effect" = "beta.outcome.smk",
+                               "CAD standard error" = "se.outcome.smk")]
+smk_bmi_t2d_table <- rename(smk_bmi_t2d_table, c("rsid" = "SNP",
+                                "chromosome" = "CHR",
+                                "position" = "BP",
+                                "effect allele" = "EFFECT_ALLELE",
+                                "non-effect allele" = "OTHER_ALLELE",
+                                "effect allele frequency" = "EAF",
+                                "LfSmk effect" = "beta.smk",
+                               "LfSmk standard error" = "se.smk",
+                               "BMI effect" = "beta.bmi",
+                               "BMI standard error" = "se.bmi",
+                               "T2D effect" = "beta.outcome.smk",
+                               "T2D standard error" = "se.outcome.smk"))
+write.table(smk_bmi_t2d_table, "MVMRtable.LfSmk.BMI.T2D.txt", sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
+
+#just below this msg are LfSMK-BMI-T2D results
+```
+
+# MVMR Smk-BMI->CAD ##
+### Get the intersection of SMK and BMI SNPs, clump/harmonize, merge instruments, and run MVMR Smk-BMI-CAD 
+
+```{r message=FALSE}
+# get the intersection of SMK, BMI and CAD SNPs
+smk_sub <- smk_int[smk_int$SNP %in% bmi_exp$SNP,]
+smk_sub <- smk_sub[smk_sub$SNP %in% cad_data$SNP,]
+
+
+# clumping smk 
+smk_sig <- smk_sub[smk_sub$pval.exposure < 5*10^-8,]
+smk_sig_clumped <- clump_data(smk_sig)
+
+bmi_sub <- bmi_exp[bmi_exp$SNP %in% smk_sig_clumped$SNP,]
+cad_sub <- cad_data[cad_data$SNP %in% smk_sig_clumped$SNP,]
+
+# harmonising by CAD data
+smk_harm <- harmonise_data(exposure_dat = smk_sig_clumped, outcome_dat = cad_sub)
+#bmi_harm <- harmonise_data(exposure_dat = bmi_sub_clumped, outcome_dat = cad_data)
+bmi_harm <- harmonise_data(exposure_dat = bmi_sub, outcome_dat = cad_sub)
+
+
+### Merge smk and bmi instruments
+# change colnames for merging
+colnames(smk_harm)[which(colnames(smk_harm) %in% c("beta.exposure", "se.exposure"))] <- c("beta.smk", "se.smk")
+colnames(bmi_harm)[which(colnames(bmi_harm) %in% c("beta.exposure", "se.exposure"))] <- c("beta.bmi", "se.bmi")
+
+colnames(smk_harm)[which(colnames(smk_harm) %in% c("beta.outcome", "se.outcome"))] <- c("beta.outcome.smk", "se.outcome.smk")
+colnames(bmi_harm)[which(colnames(bmi_harm) %in% c("beta.outcome", "se.outcome"))] <- c("beta.outcome.bmi", "se.outcome.bmi")
+
+# merge smk and bmi instruments
+combined <- merge(select(smk_harm, SNP, beta.smk, se.smk, beta.outcome.smk, se.outcome.smk), 
+                  select(bmi_harm, SNP, beta.bmi, se.bmi, beta.outcome.bmi, se.outcome.bmi), by="SNP")
+
+
+
+# flip the sign of inconsistant harmonisation
+inconsistant <- combined$beta.outcome.smk != combined$beta.outcome.bmi
+combined[inconsistant,]$beta.bmi <- combined[inconsistant,]$beta.bmi * -1
+
+print(paste("# perfect overlapped SNPs is:", nrow(combined)))
+
+## Final instrument for MVMR
+final_instrument <- data.frame("beta.smk" = combined$beta.smk,
+                               "se.smk" = combined$se.smk,
+                               "beta.bmi" = combined$beta.bmi,
+                               "se.bmi" = combined$se.bmi,
+                               "beta.cad" = combined$beta.outcome.smk,
+                               "se.cad" = combined$se.outcome.smk,
+                               "snp" = combined$SNP)
+
+print(paste("# SNPs in the final instrument is:", nrow(final_instrument)))
+
+
+## Perform MVMR
+mvmr_in <- format_mvmr(BXGs = select(combined, beta.smk, beta.bmi), 
+            BYG = combined$beta.outcome.smk, 
+            seBXGs = select(combined, se.smk, se.bmi),
+            seBYG = combined$se.outcome.smk,
+            RSID = combined$SNP)
+rownames(mvmr_in) <- mvmr_in$SNP
+
+#mvmr_in <- format_mvmr(BXGs = select(final_instrument, beta.smk, beta.bmi), 
+#            BYG = final_instrument$beta.cad, 
+#            seBXGs = select(final_instrument, se.smk, se.bmi),
+#            seBYG = final_instrument$se.cad,
+#            RSID = final_instrument$snp)
+
+# ******note: gencov is set to default 0. 
+# ******may need  covariance between the effect of the genetic variants on each exposure
+mvmr_out <- mvmr(mvmr_in, gencov = cov(combined$beta.smk, combined$beta.bmi), weights = 1)
+mvmr_out <- mvmr(mvmr_in, gencov = 0, weights = 1)
+
+
+# this is from mvmr final result
+## %%% need to change df
+m1 <- mvmr_out$coef
+m1
+data <- data.frame("beta" = m1[,"Estimate"], "se" = m1[,"Std. Error"], 
+           df = 283, "t" = m1[,"t value"], "exposure" = c("Smoking", "BMI"))
+data$up <- data$beta + data$se * qt(0.975, df = data$df)
+data$low <- data$beta - data$se * qt(0.975, df = data$df)
+
+# exp
+data$exp.beta <- exp(data$beta)
+data$exp.up <- exp(data$up)
+data$exp.low <- exp(data$low)
+
+data$exp2.beta <- exp(log(2) * data$beta)
+data$exp2.up <- exp(log(2) * data$up)
+data$exp2.low <- exp(log(2) * data$low)
+
+# plot
+## %%% need to change filename and title
+## %%% need to change scale of beta
+pdf("MVMR.LfSmk-BMI_CAD.pdf")
+ggplot2::ggplot(data, aes(y = exposure, x = exp.beta)) + 
+  ggplot2::geom_vline(xintercept = 1, linetype = "dotted") + 
+  ggplot2::geom_errorbarh(ggplot2::aes(xmin = exp.low, xmax = exp.up, size=as.factor(0.01),
+                                       colour = as.factor(0.01)), size=4,
+                          height = 0) + ggplot2::geom_point(ggplot2::aes(colour = as.factor(0.01)), size=16)  + 
+  ggplot2::scale_colour_manual(values = c("black", "red")) + 
+  ggplot2::scale_size_manual(values = c(0.3, 1)) + 
+  ggplot2::theme(legend.position = "none", 
+                 axis.title.y = ggplot2::element_text(size = 14), 
+                 axis.ticks.y = ggplot2::element_line(size = 0), 
+                 axis.title.x = ggplot2::element_text(size = 14)) + 
+  ggplot2::ggtitle("MR odds ratio for Smoking on CAD conditioning on BMI") + 
+  theme(plot.title = element_text(size = 15, face = "bold"))
+
+#print out table
+smk_info <- merge(combined,smk,by="SNP")
+smk_bmi_cad_table <- smk_info[c("rsid" = "SNP",
+                                "chromosome" = "CHR",
+                                "position" = "BP",
+                                "effect allele" = "EFFECT_ALLELE",
+                                "non-effect allele" = "OTHER_ALLELE",
+                                "effect allele frequency" = "EAF",
+                                "LfSmk effect" = "beta.smk",
+                               "LfSmk standard error" = "se.smk",
+                               "BMI effect" = "beta.bmi",
+                               "BMI standard error" = "se.bmi",
+                               "CAD effect" = "beta.outcome.smk",
+                               "CAD standard error" = "se.outcome.smk")]
+smk_bmi_cad_table <- rename(smk_bmi_cad_table, c("rsid" = "SNP",
+                                "chromosome" = "CHR",
+                                "position" = "BP",
+                                "effect allele" = "EFFECT_ALLELE",
+                                "non-effect allele" = "OTHER_ALLELE",
+                                "effect allele frequency" = "EAF",
+                                "LfSmk effect" = "beta.smk",
+                               "LfSmk standard error" = "se.smk",
+                               "BMI effect" = "beta.bmi",
+                               "BMI standard error" = "se.bmi",
+                               "CAD effect" = "beta.outcome.smk",
+                               "CAD standard error" = "se.outcome.smk"))
+write.table(smk_bmi_cad_table, "MVMRtable.LfSmk.BMI.CAD.txt", sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
+
+
+
+#MVMR LfSmk-BMI->CAD plot below
+```
+
+# TwoSample MR LifetimeSmk->CAD 
+
+```{r message=FALSE}
+
+# get the intersection of SMK and BMI SNPs
+smk_sub <- smk_int[smk_int$SNP %in% cad_data$SNP,]
+
+# clumping smk 
+smk_sig <- smk_sub[smk_sub$pval.exposure < 5*10^-8,]
+smk_sig_clumped <- clump_data(smk_sig)
+nrow(smk_sig_clumped)
+
+cad_sub <- cad_data[cad_data$SNP %in% smk_sig_clumped$SNP,]
+
+# harmonising by bmi data
+smk_cad <- harmonise_data(exposure_dat = smk_sig_clumped, outcome_dat = cad_sub)
+
+# F statistics
+print("this is R2 for the F-statistic based on Shim et al - plug in to mRnd") 
+# sample size for BMI is 700000, T2D is 898130, CAD is 547261
+smk_cad$r2 <- 2*(smk_cad$beta.outcome)^2 * smk_cad$eaf.outcome * (1-smk_cad$eaf.outcome) /
+  (2*(smk_cad$beta.outcome)^2 * smk_cad$eaf.outcome * (1-smk_cad$eaf.outcome) + 
+     (smk_cad$se.outcome)^2*2*547261*smk_cad$eaf.outcome * (1-smk_cad$eaf.outcome))
+#or could use generic, with fstat$samplesize.outcome
+#dat$r2 <- 2*(dat$beta.outcome)^2 * dat$eaf.outcome * (1-dat$eaf.outcome) / (2*(dat$beta.outcome)^2 * dat$eaf.outcome * (1-dat$eaf.outcome) + (dat$se.outcome)^2*2*dat$samplesize.outcome*dat$eaf.outcome * (1-dat$eaf.outcome))
+sum(smk_cad$r2)
+
+#run MR
+res <- mr(smk_cad)
+res
+het <- mr_heterogeneity(smk_cad)
+het
+hp <- mr_pleiotropy_test(smk_cad)
+hp
+
+
+#Good forest plot
+pdf("Forest.LfSmk.CAD.pdf")
+res_single <- mr_singlesnp(smk_cad, all_method = c("mr_ivw",
+                                               "mr_egger_regression",
+                                               "mr_weighted_median"))
+singlesnp_results <- res_single
+exponentiate <- FALSE
+
+requireNamespace("ggplot2", quietly = TRUE)
+requireNamespace("plyr", quietly = TRUE)
+res <- plyr::dlply(singlesnp_results, c("id.exposure", "id.outcome"), function(d) {
+  d <- plyr::mutate(d)
+  if (sum(!grepl("All", d$SNP)) < 2) {
+    return(blank_plot("Insufficient number of SNPs"))
+  }
+  levels(d$SNP)[levels(d$SNP) == "All - Inverse variance weighted"] <- "Inverse variance weighted"
+  levels(d$SNP)[levels(d$SNP) == "All - MR Egger"] <- "MR Egger"
+  levels(d$SNP)[levels(d$SNP) == "All - Weighted median"] <- "Weighted median"
+  #d[d$SNP == "All - Inverse variance weighted", "SNP"] <- "Inverse variance weighted"
+  #d[d$SNP == "All - MR Egger", "SNP"] <- "MR Egger"
+  #d[d$SNP == "All - Weighted median", "SNP"] <- "Inverse variance weighted"
+                     am <- grep("All", d$SNP, value = TRUE)
+
+                     d$up <- d$b + 1.96 * d$se #or 
+                     d$lo <- d$b - 1.96 * d$se
+                     
+                     # change unit
+                     # continuous gets exp(beta), binary is exp(ln(2)*beta)
+                     d$b <- exp(d$b * log(2)) # d$b for continuous  ##  d$b * log(2) for binary exposure
+                     d$up <- exp(d$up * log(2)) # d$up for continuous  ##  d$up * log(2) for binary exposure
+                     d$lo <- exp(d$lo * log(2)) # d$lo for continuous  ##  d$lo * log(2) for binary exposure
+                     
+                     d$tot <- 0.01
+                     d$tot[d$SNP %in% am] <- 1
+                     d$SNP <- as.character(d$SNP)
+                     nom <- d$SNP[!d$SNP %in% am]
+                     nom <- nom[order(d$b)]
+                     d <- rbind(d, d[nrow(d), ])
+                     #d$SNP[nrow(d) - 1] <- ""
+                     #d$b[nrow(d) - 1] <- NA
+                     #d$up[nrow(d) - 1] <- NA
+                     #d$lo[nrow(d) - 1] <- NA
+                     d$SNP <- ordered(d$SNP, levels = c(am, "", nom))
+                     xint <- 0
+                     if (exponentiate) {
+                       d$b <- exp(d$b)
+                       d$up <- exp(d$up)
+                       d$lo <- exp(d$lo)
+                       xint <- 1
+                     }
+                     #print(tail(d, 4))
+                     d <- tail(d, 4)
+                     d <- head(d, 3)
+                     d[d$SNP == "Inverse variance weighted", "samplesize"] <- 3
+                     d[d$SNP == "Weighted median", "samplesize"] <- 2
+                     d[d$SNP == "MR Egger", "samplesize"] <- 1
+                     d$SNP2 <- reorder(d$SNP, d$samplesize)
+                     print(d)
+                     ggplot2::ggplot(d, aes(y = SNP2, x = b)) + 
+                       ggplot2::geom_vline(xintercept = 1, linetype = "dotted") + 
+                       ggplot2::geom_errorbarh(ggplot2::aes(xmin = lo, xmax = up, size=as.factor(tot),colour = as.factor(tot)), size=4,
+                                height = 0) + ggplot2::geom_point(ggplot2::aes(colour = as.factor(tot)), size=16)  + 
+                       ggplot2::scale_colour_manual(values = c("black", "red")) + 
+                       ggplot2::scale_size_manual(values = c(0.3, 1)) + 
+                       ggplot2::theme(legend.position = "none", 
+                        axis.text.y = ggplot2::element_text(size = 14), 
+                        axis.ticks.y = ggplot2::element_line(size = 0), 
+                        axis.title.x = ggplot2::element_text(size = 14)) + 
+                       ggplot2::labs(y = "", x = paste0("MR odds ratio for\n'", 
+                                                        d$exposure[1], "' on '", d$outcome[1], "'"))
+                   })
+print(res) #this prints if within Rstudio
+
+#print out table
+lfsmk_cad_table <- smk_cad[c("rsid" = "SNP",
+                                "effect allele" = "effect_allele.exposure",
+                                "non-effect allele" = "other_allele.exposure",
+                                "effect allele frequency" = "eaf.exposure",
+                                "LfSmk effect" = "beta.exposure",
+                               "LfSmk standard error" = "se.exposure",
+                               "CAD effect" = "beta.outcome",
+                               "CAD standard error" = "se.outcome")]
+lfsmk_cad_table <- rename(lfsmk_cad_table, c("rsid" = "SNP",
+                                "effect allele" = "effect_allele.exposure",
+                                "non-effect allele" = "other_allele.exposure",
+                                "effect allele frequency" = "eaf.exposure",
+                                "LfSmk effect" = "beta.exposure",
+                               "LfSmk standard error" = "se.exposure",
+                               "CAD effect" = "beta.outcome",
+                               "CAD standard error" = "se.outcome"))
+write.table(lfsmk_cad_table, "MRtable.LfSmk.CAD.txt", sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
+
+
+```
+
+
+
+#TwoSample MR smoking->BMI
+
+
+```{r message=FALSE}
+#format bmi as outcome
+bmi_out <- format_data(bmi, type="outcome", snps=bmi$SNP, header=T,
+                        snp_col="SNP", 
+                        beta_col="BETA", se_col="SE",
+                        pval_col="P", samplesize_col ="N",
+                        eaf_col="Freq_Tested_Allele_in_HRS",
+                        effect_allele_col="Tested_Allele",
+                        other_allele_col="Other_Allele")
+
+# get the intersection of SMK and BMI SNPs
+smk_sub <- smk_int[smk_int$SNP %in% bmi_out$SNP,]
+
+# clumping smk 
+smk_sig <- smk_sub[smk_sub$pval.exposure < 5*10^-8,]
+smk_sig_clumped <- clump_data(smk_sig)
+nrow(smk_sig_clumped)
+
+bmi_sub <- bmi_out[bmi_out$SNP %in% smk_sig_clumped$SNP,]
+
+# harmonising by bmi data
+smk_bmi <- harmonise_data(exposure_dat = smk_sig_clumped, outcome_dat = bmi_sub)
+
+# F statistics
+print("this is R2 for the F-statistic based on Shim et al - plug in to mRnd") 
+# sample size for BMI is 700000, T2D is 898130, CAD is 547261
+smk_bmi$r2 <- 2*(smk_bmi$beta.outcome)^2 * smk_bmi$eaf.outcome * (1-smk_bmi$eaf.outcome) /
+  (2*(smk_bmi$beta.outcome)^2 * smk_bmi$eaf.outcome * (1-smk_bmi$eaf.outcome) + 
+     (smk_bmi$se.outcome)^2*2*700000*smk_bmi$eaf.outcome * (1-smk_bmi$eaf.outcome))
+#or could use generic, with fstat$samplesize.outcome
+#dat$r2 <- 2*(dat$beta.outcome)^2 * dat$eaf.outcome * (1-dat$eaf.outcome) / (2*(dat$beta.outcome)^2 * dat$eaf.outcome * (1-dat$eaf.outcome) + (dat$se.outcome)^2*2*dat$samplesize.outcome*dat$eaf.outcome * (1-dat$eaf.outcome))
+sum(smk_bmi$r2)
+
+
+
+#run MR
+res <- mr(smk_bmi)
+res
+het <- mr_heterogeneity(smk_bmi)
+het
+hp <- mr_pleiotropy_test(smk_bmi)
+hp
+
+#Good forest plot
+pdf("Forest.LfSmk.BMI.pdf")
+res_single <- mr_singlesnp(smk_bmi, all_method = c("mr_ivw",
+                                               "mr_egger_regression",
+                                               "mr_weighted_median"))
+singlesnp_results <- res_single
+exponentiate <- FALSE
+
+requireNamespace("ggplot2", quietly = TRUE)
+requireNamespace("plyr", quietly = TRUE)
+res <- plyr::dlply(singlesnp_results, c("id.exposure", "id.outcome"), function(d) {
+  d <- plyr::mutate(d)
+  if (sum(!grepl("All", d$SNP)) < 2) {
+    return(blank_plot("Insufficient number of SNPs"))
+  }
+  levels(d$SNP)[levels(d$SNP) == "All - Inverse variance weighted"] <- "Inverse variance weighted"
+  levels(d$SNP)[levels(d$SNP) == "All - MR Egger"] <- "MR Egger"
+  levels(d$SNP)[levels(d$SNP) == "All - Weighted median"] <- "Weighted median"
+  #d[d$SNP == "All - Inverse variance weighted", "SNP"] <- "Inverse variance weighted"
+  #d[d$SNP == "All - MR Egger", "SNP"] <- "MR Egger"
+  #d[d$SNP == "All - Weighted median", "SNP"] <- "Inverse variance weighted"
+                     am <- grep("All", d$SNP, value = TRUE)
+
+                     d$up <- d$b + 1.96 * d$se #or 
+                     d$lo <- d$b - 1.96 * d$se
+                     
+                     # change unit
+                     # continuous gets exp(beta), binary is exp(ln(2)*beta)
+                     d$b <- exp(d$b * log(2)) # d$b for continuous  ##  d$b * log(2) for binary exposure
+                     d$up <- exp(d$up * log(2)) # d$up for continuous  ##  d$up * log(2) for binary exposure
+                     d$lo <- exp(d$lo * log(2)) # d$lo for continuous  ##  d$lo * log(2) for binary exposure
+                     
+                     d$tot <- 0.01
+                     d$tot[d$SNP %in% am] <- 1
+                     d$SNP <- as.character(d$SNP)
+                     nom <- d$SNP[!d$SNP %in% am]
+                     nom <- nom[order(d$b)]
+                     d <- rbind(d, d[nrow(d), ])
+                     #d$SNP[nrow(d) - 1] <- ""
+                     #d$b[nrow(d) - 1] <- NA
+                     #d$up[nrow(d) - 1] <- NA
+                     #d$lo[nrow(d) - 1] <- NA
+                     d$SNP <- ordered(d$SNP, levels = c(am, "", nom))
+                     xint <- 0
+                     if (exponentiate) {
+                       d$b <- exp(d$b)
+                       d$up <- exp(d$up)
+                       d$lo <- exp(d$lo)
+                       xint <- 1
+                     }
+                     #print(tail(d, 4))
+                     d <- tail(d, 4)
+                     d <- head(d, 3)
+                     d[d$SNP == "Inverse variance weighted", "samplesize"] <- 3
+                     d[d$SNP == "Weighted median", "samplesize"] <- 2
+                     d[d$SNP == "MR Egger", "samplesize"] <- 1
+                     d$SNP2 <- reorder(d$SNP, d$samplesize)
+                     print(d)
+                     ggplot2::ggplot(d, aes(y = SNP2, x = b)) + 
+                       ggplot2::geom_vline(xintercept = 1, linetype = "dotted") + 
+                       ggplot2::geom_errorbarh(ggplot2::aes(xmin = lo, xmax = up, size=as.factor(tot),colour = as.factor(tot)), size=4,
+                                height = 0) + ggplot2::geom_point(ggplot2::aes(colour = as.factor(tot)), size=16)  + 
+                       ggplot2::scale_colour_manual(values = c("black", "red")) + 
+                       ggplot2::scale_size_manual(values = c(0.3, 1)) + 
+                       ggplot2::theme(legend.position = "none", 
+                        axis.text.y = ggplot2::element_text(size = 14), 
+                        axis.ticks.y = ggplot2::element_line(size = 0), 
+                        axis.title.x = ggplot2::element_text(size = 14)) + 
+                       ggplot2::labs(y = "", x = paste0("MR odds ratio for\n'", 
+                                                        d$exposure[1], "' on '", d$outcome[1], "'"))
+                   })
+print(res) #this prints if within Rstudio
+
+lfsmk_bmi_table <- smk_bmi[c("rsid" = "SNP",
+                                "effect allele" = "effect_allele.exposure",
+                                "non-effect allele" = "other_allele.exposure",
+                                "effect allele frequency" = "eaf.exposure",
+                                "LfSmk effect" = "beta.exposure",
+                               "LfSmk standard error" = "se.exposure",
+                               "CAD effect" = "beta.outcome",
+                               "CAD standard error" = "se.outcome")]
+lfsmk_bmi_table <- rename(lfsmk_bmi_table, c("rsid" = "SNP",
+                                "effect allele" = "effect_allele.exposure",
+                                "non-effect allele" = "other_allele.exposure",
+                                "effect allele frequency" = "eaf.exposure",
+                                "LfSmk effect" = "beta.exposure",
+                               "LfSmk standard error" = "se.exposure",
+                               "BMI effect" = "beta.outcome",
+                               "BMI standard error" = "se.outcome"))
+write.table(lfsmk_bmi_table, "MRtable.LfSmk.BMI.txt", sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
+
+```
+
+#TwoSample MR LifetimeSmoking->T2D
+
+```{r message=FALSE}
+
+# get the intersection of SMK and BMI SNPs
+smk_sub <- smk_int[smk_int$SNP %in% pad_data$SNP,]
+
+# clumping smk 
+smk_sig <- smk_sub[smk_sub$pval.exposure < 5*10^-8,]
+smk_sig_clumped <- clump_data(smk_sig)
+nrow(smk_sig_clumped)
+
+pad_sub <- pad_data[pad_data$SNP %in% smk_sig_clumped$SNP,]
+
+# harmonising by bmi data
+smk_t2d <- harmonise_data(exposure_dat = smk_sig_clumped, outcome_dat = pad_sub)
+
+# F statistics
+print("this is R2 for the F-statistic based on Shim et al - plug in to mRnd") 
+# sample size for BMI is 700000, T2D is 898130, CAD is 547261
+smk_t2d$r2 <- 2*(smk_t2d$beta.outcome)^2 * smk_t2d$eaf.outcome * (1-smk_t2d$eaf.outcome) /
+  (2*(smk_t2d$beta.outcome)^2 * smk_t2d$eaf.outcome * (1-smk_t2d$eaf.outcome) + 
+     (smk_t2d$se.outcome)^2*2*898130*smk_t2d$eaf.outcome * (1-smk_t2d$eaf.outcome))
+#or could use generic, with fstat$samplesize.outcome
+#dat$r2 <- 2*(dat$beta.outcome)^2 * dat$eaf.outcome * (1-dat$eaf.outcome) / (2*(dat$beta.outcome)^2 * dat$eaf.outcome * (1-dat$eaf.outcome) + (dat$se.outcome)^2*2*dat$samplesize.outcome*dat$eaf.outcome * (1-dat$eaf.outcome))
+sum(smk_t2d$r2)
+
+#run MR
+res <- mr(smk_t2d)
+res
+het <- mr_heterogeneity(smk_t2d)
+het
+hp <- mr_pleiotropy_test(smk_t2d)
+hp
+
+
+#Good forest plot
+pdf("Forest.LfSmk.T2D.pdf")
+res_single <- mr_singlesnp(smk_t2d, all_method = c("mr_ivw",
+                                               "mr_egger_regression",
+                                               "mr_weighted_median"))
+singlesnp_results <- res_single
+exponentiate <- FALSE
+
+requireNamespace("ggplot2", quietly = TRUE)
+requireNamespace("plyr", quietly = TRUE)
+res <- plyr::dlply(singlesnp_results, c("id.exposure", "id.outcome"), function(d) {
+  d <- plyr::mutate(d)
+  if (sum(!grepl("All", d$SNP)) < 2) {
+    return(blank_plot("Insufficient number of SNPs"))
+  }
+  levels(d$SNP)[levels(d$SNP) == "All - Inverse variance weighted"] <- "Inverse variance weighted"
+  levels(d$SNP)[levels(d$SNP) == "All - MR Egger"] <- "MR Egger"
+  levels(d$SNP)[levels(d$SNP) == "All - Weighted median"] <- "Weighted median"
+  #d[d$SNP == "All - Inverse variance weighted", "SNP"] <- "Inverse variance weighted"
+  #d[d$SNP == "All - MR Egger", "SNP"] <- "MR Egger"
+  #d[d$SNP == "All - Weighted median", "SNP"] <- "Inverse variance weighted"
+                     am <- grep("All", d$SNP, value = TRUE)
+
+                     d$up <- d$b + 1.96 * d$se #or 
+                     d$lo <- d$b - 1.96 * d$se
+                     
+                     # change unit
+                     # continuous gets exp(beta), binary is exp(ln(2)*beta)
+                     d$b <- exp(d$b * log(2)) # d$b for continuous  ##  d$b * log(2) for binary exposure
+                     d$up <- exp(d$up * log(2)) # d$up for continuous  ##  d$up * log(2) for binary exposure
+                     d$lo <- exp(d$lo * log(2)) # d$lo for continuous  ##  d$lo * log(2) for binary exposure
+                     
+                     d$tot <- 0.01
+                     d$tot[d$SNP %in% am] <- 1
+                     d$SNP <- as.character(d$SNP)
+                     nom <- d$SNP[!d$SNP %in% am]
+                     nom <- nom[order(d$b)]
+                     d <- rbind(d, d[nrow(d), ])
+                     #d$SNP[nrow(d) - 1] <- ""
+                     #d$b[nrow(d) - 1] <- NA
+                     #d$up[nrow(d) - 1] <- NA
+                     #d$lo[nrow(d) - 1] <- NA
+                     d$SNP <- ordered(d$SNP, levels = c(am, "", nom))
+                     xint <- 0
+                     if (exponentiate) {
+                       d$b <- exp(d$b)
+                       d$up <- exp(d$up)
+                       d$lo <- exp(d$lo)
+                       xint <- 1
+                     }
+                     #print(tail(d, 4))
+                     d <- tail(d, 4)
+                     d <- head(d, 3)
+                     d[d$SNP == "Inverse variance weighted", "samplesize"] <- 3
+                     d[d$SNP == "Weighted median", "samplesize"] <- 2
+                     d[d$SNP == "MR Egger", "samplesize"] <- 1
+                     d$SNP2 <- reorder(d$SNP, d$samplesize)
+                     print(d)
+                     ggplot2::ggplot(d, aes(y = SNP2, x = b)) + 
+                       ggplot2::geom_vline(xintercept = 1, linetype = "dotted") + 
+                       ggplot2::geom_errorbarh(ggplot2::aes(xmin = lo, xmax = up, size=as.factor(tot),colour = as.factor(tot)), size=4,
+                                height = 0) + ggplot2::geom_point(ggplot2::aes(colour = as.factor(tot)), size=16)  + 
+                       ggplot2::scale_colour_manual(values = c("black", "red")) + 
+                       ggplot2::scale_size_manual(values = c(0.3, 1)) + 
+                       ggplot2::theme(legend.position = "none", 
+                        axis.text.y = ggplot2::element_text(size = 14), 
+                        axis.ticks.y = ggplot2::element_line(size = 0), 
+                        axis.title.x = ggplot2::element_text(size = 14)) + 
+                       ggplot2::labs(y = "", x = paste0("MR odds ratio for\n'", 
+                                                        d$exposure[1], "' on '", d$outcome[1], "'"))
+                   })
+print(res) #this prints if within Rstudio
+
+
+lfsmk_t2d_table <- smk_t2d[c("rsid" = "SNP",
+                                "effect allele" = "effect_allele.exposure",
+                                "non-effect allele" = "other_allele.exposure",
+                                "effect allele frequency" = "eaf.exposure",
+                                "LfSmk effect" = "beta.exposure",
+                               "LfSmk standard error" = "se.exposure",
+                               "CAD effect" = "beta.outcome",
+                               "CAD standard error" = "se.outcome")]
+lfsmk_t2d_table <- rename(lfsmk_t2d_table, c("rsid" = "SNP",
+                                "effect allele" = "effect_allele.exposure",
+                                "non-effect allele" = "other_allele.exposure",
+                                "effect allele frequency" = "eaf.exposure",
+                                "LfSmk effect" = "beta.exposure",
+                               "LfSmk standard error" = "se.exposure",
+                               "T2D effect" = "beta.outcome",
+                               "T2D standard error" = "se.outcome"))
+write.table(lfsmk_t2d_table, "MRtable.LfSmk.T2D.txt", sep="\t", row.names=FALSE, col.names=TRUE, quote=FALSE)
+
+```
+
+
+
+
+
+
