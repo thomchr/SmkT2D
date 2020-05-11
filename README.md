@@ -1,6 +1,6 @@
-# Initiation of smoking and susceptibility to type 2 diabetes: a mendelian randomization study
+# Genetically determined body mass index mediates the effect of smoking on type 2 diabetes risk, but not coronary artery disease risk
 
-Christopher S Thom, Zhuoran Ding, Benjamin F Voight
+Christopher S Thom, Zhuoran Ding, , Michael G Levin, Scott M Damrauer, Benjamin F Voight
 
 Corresponding author: Benjamin F Voight
 
@@ -13,6 +13,12 @@ If you have questions or would like to discuss any of this: thomc@email.chop.edu
 Smoking traits
 
 Liu, M. et al. Association studies of up to 1.2 million individuals yield new insights into the genetic etiology of tobacco and alcohol use. Nature Genetics 51, 237–244 (2019)
+
+
+
+Lifetime smoking score
+
+Wootton, R. E., Richmond, R. C., Stuijfzand, B. G., et al. (2019) Evidence for causal effects of lifetime smoking on risk for depression and schizophrenia: a Mendelian randomisation study. Psychol. Med., 1–9.
 
 
 
