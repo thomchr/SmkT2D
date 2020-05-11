@@ -7,7 +7,7 @@ Corresponding author: Benjamin F Voight
 If you have questions or would like to discuss any of this: thomc@email.chop.edu
 
 
-# Summary statistics from the following GWAS were used as part of this study
+# Summary statistics and data from the following studies were used in our work
  We used data from individuals of European ancestry only. All data sets were analyzed in genome build hg19. 
 
 Smoking traits
