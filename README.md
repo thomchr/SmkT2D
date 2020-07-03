@@ -43,7 +43,7 @@ Yengo, L., Sidorenko, J., Kemper, K. E., et al. (2018) Meta-analysis of genome-w
 Locke, A. E., Kahali, B., Berndt, S. I., et al. (2015) Genetic studies of body mass index yield new insights for obesity biology. Nature, 518, 197–206.
 
 
-# Individual MR experiments analyzed data from the VA Million Veteran Program
+**Individual MR experiments analyzed data from the VA Million Veteran Program
 
 
 # Scripts are in a separate branches
